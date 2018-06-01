@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+from django.core.paginator import Paginator
 from django.http import JsonResponse,HttpResponse
 from django.shortcuts import render,redirect,HttpResponseRedirect
 
 from df_goods.models import GoodsInfo
+from df_order.models import OrderInfo
 from models import *
 from hashlib import sha1
 from .islogin import islogin
@@ -74,7 +76,11 @@ def login_handle(request):
     else:
         context = {'title': '用户登录', 'error_name': 1, 'error_pwd': 0, 'uname': uname}
         return render(request, 'df_user/login.html', context)
-
+# 用户退出
+def logout(request):
+    request.session.flush()
+    return redirect('/')
+# 登陆用户中心
 @islogin
 def info(request):
     user_email=UserInfo.objects.get(id=request.session['user_id']).uemail
@@ -93,3 +99,53 @@ def info(request):
              'info':1,
              'goods_list':goods_list}
     return render(request,'df_user/user_center_info.html',context)
+# 订单
+@islogin
+def order(request):
+    context={'title':'用户中心','page_name':1,'order':1}
+    return render(request,'df_user/user_center_order.html',context)
+# 收获地址
+@islogin
+def site(request):
+    user = UserInfo.objects.get(id=request.session['user_id'])
+    if request.method=='POST':
+        post=request.POST
+        user.ushou=post.get('ushou')
+        user.uaddress=post.get('uaddress')
+        user.uphone=post.get('uphone')
+        user.ucode=post.get('ucode')
+        user.save()
+    context={'title':'用户中心','user':user,'page_name':1,'site':1}
+    return render(request,'df_user/user_center_site.html',context)
+
+# 此页面用户展示用户提交的订单，由购物车页面下单后转调过来，也可以从个人信息页面查看
+# 根据用户订单是否支付、下单顺序进行排序
+
+def user_center_order(request,pageid):
+    uid=request.session.get('user_id')
+    orderinfos=OrderInfo.objects.filter(user_id=uid).order_by('zhifu','-oid')
+    # 分页
+    paginator=Paginator(orderinfos,2)
+
+    orderlist=paginator.page(int(pageid))
+
+    plist=paginator.page_range
+    # 3页分页显示
+    qian1=0
+    hou=0
+    hou2=0
+    qian2=0
+    dd=int(pageid)
+    lenn=len(plist)
+
+    if dd>1:
+        qian1=dd-1
+    if dd>3:
+        qian2=dd-2
+    if dd<lenn:
+        hou=dd+1
+    if dd+2<lenn:
+        hou2=dd+2
+    context={'page_name':1,'title':'全部订单','pageid':int(pageid),'order':1,'orderlist':orderlist,
+             'plist':plist,'pre':qian1,'next':hou,'pree':qian2,'lenn':lenn,'nextt':hou2}
+    return render(request,'df_user/user_center_order.html',context)
